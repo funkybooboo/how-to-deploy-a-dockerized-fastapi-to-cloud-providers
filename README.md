@@ -45,4 +45,14 @@ code .
 
 ## Other Cloud Providers
 
-See the [main branch README](../../tree/main) for Google Cloud deployment.
+See the [main branch README](../../tree/main) for an overview of all supported cloud providers.
+
+## Credits
+
+This project is based on the tutorial by Thaddeus Thomas:
+- **Video Tutorial**: [How to Deploy a Dockerized FastAPI to Google Cloud Run](https://www.youtube.com/watch?v=DQwAX5pS4E8)
+- **Original Repository**: [thaddavis/how-to-deploy-a-dockerized-fastapi-to-google-cloud-run](https://github.com/thaddavis/how-to-deploy-a-dockerized-fastapi-to-google-cloud-run/tree/main)
+
+## License
+
+GPL-3.0
