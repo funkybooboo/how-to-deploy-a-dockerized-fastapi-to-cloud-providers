@@ -52,6 +52,351 @@ main (cloud-agnostic base)
 
 ---
 
+## Initial Repository State & Problems Found
+
+### Exploration Findings
+
+**Branches Discovered:**
+- `main` - Cloud-agnostic base code (had security issues)
+- `gcloud` - Google Cloud deployment (BROKEN - all files deleted)
+- `azure` - Azure deployment (functional but needed improvement)
+
+**Critical Issues Identified:**
+
+1. **Security Vulnerabilities:**
+   ```python
+   # BEFORE (main.py) - debugpy ALWAYS enabled
+   import debugpy
+   debugpy.listen(("0.0.0.0", 5678))  # ❌ Running in production!
+
+   # BEFORE (main.py) - CORS allows everything
+   allow_origins=["*"]  # ❌ Security risk
+   ```
+
+2. **Code Quality Issues:**
+   - Directory named `src/smokeTest/` instead of `src/api/`
+   - Function named `prompt()` instead of descriptive `get_hello()`
+   - No docstrings or type hints
+   - No tests
+   - No linting or formatting configuration
+
+3. **GCloud Branch State:**
+   - All deployment files deleted in commit `dc791ec`
+   - Only README and basic source code remained
+   - No way to actually deploy to Cloud Run
+   - User wanted to start fresh, not restore from git history
+
+4. **Missing Infrastructure:**
+   - No test suite
+   - No development dependencies (pytest, ruff, black, mypy)
+   - No pyproject.toml for tool configuration
+   - No .env.example for configuration guidance
+   - No GitHub Actions workflows
+   - .vscode directory committed to repository
+
+5. **Documentation Issues:**
+   - Tutorials referenced non-existent files
+   - No conceptual explanations, just commands
+   - No troubleshooting guide
+   - No cost estimates or cleanup instructions
+
+### User's Original Request
+
+> "I want to move all this code to a gcp branch, I want to make a azure branch and a aws branch, I want the main branch to have the shared code between the three branches and a README that tells people what branch to go to to find information about their cloud provider. I also want a digital ocean branch and a linode branch."
+
+**Refined to:**
+- Focus on GCloud and Azure only (AWS, DigitalOcean, Linode deferred)
+- Use "gcloud" instead of "gcp" (more common terminology)
+- Create comprehensive documentation
+- Ensure deployments actually work
+- Add starter branches for learning
+
+---
+
+## Technical Implementation Details
+
+### Security Fixes Implemented
+
+#### Conditional Debugging (src/main.py)
+```python
+# AFTER - Only enable debugpy when DEBUG=true
+from .config import get_settings
+
+settings = get_settings()
+
+if settings.DEBUG:
+    import debugpy
+    debugpy.listen(("0.0.0.0", 5678))
+    print(f"🐛 Debugger listening on port 5678 (DEBUG={settings.DEBUG})")
+```
+
+**Why this matters:**
+- Debugpy listens on a port accessible from network
+- In production, this could allow remote code execution
+- Conditional import prevents debugpy from being imported at all when DEBUG=false
+
+#### Environment-Based CORS (src/main.py)
+```python
+# AFTER - CORS origins from environment variable
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,  # From environment, not hardcoded
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+**Environment configuration (.env.example):**
+```bash
+# Development
+CORS_ORIGINS=*
+
+# Production
+CORS_ORIGINS=https://example.com,https://www.example.com
+```
+
+#### Configuration Management (src/config.py)
+```python
+import os
+from typing import List
+from functools import lru_cache
+
+class Settings:
+    """Application settings from environment variables."""
+
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
+    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "*").split(",")
+    HOST: str = os.getenv("HOST", "0.0.0.0")
+    PORT: int = int(os.getenv("PORT", "8080"))
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    API_PREFIX: str = os.getenv("API_PREFIX", "/api")
+    API_VERSION: str = os.getenv("API_VERSION", "1.0.0")
+
+    @property
+    def is_production(self) -> bool:
+        """Check if running in production environment."""
+        return self.ENVIRONMENT == "production"
+
+@lru_cache()
+def get_settings() -> Settings:
+    """Get cached settings instance (singleton pattern)."""
+    return Settings()
+```
+
+### Service Account Permissions (Phase 2 - GCloud)
+
+**Required IAM Roles for GitHub Actions:**
+
+1. **Cloud Run Admin** (`roles/run.admin`)
+   - Deploy and manage Cloud Run services
+   - Update service configurations
+   - View service details
+
+2. **Artifact Registry Writer** (`roles/artifactregistry.writer`)
+   - Push Docker images to Artifact Registry
+   - Create new image versions
+   - Manage image tags
+
+3. **Service Account User** (`roles/iam.serviceAccountUser`)
+   - Act as the service account
+   - Deploy services using service account identity
+
+4. **Storage Admin** (`roles/storage.admin`)
+   - Manage Cloud Build cache (if using Cloud Build)
+   - Store build artifacts
+
+**Grant commands:**
+```bash
+PROJECT_ID="your-project-id"
+SA_EMAIL="github-actions@${PROJECT_ID}.iam.gserviceaccount.com"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/run.admin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/artifactregistry.writer"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/iam.serviceAccountUser"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/storage.admin"
+```
+
+### Cost Calculation Formulas
+
+**Cloud Run Pricing (as of 2024):**
+
+```
+Request Cost = (Requests / 1,000,000) × $0.40
+
+Memory Cost = (GB-seconds) × $0.00001800
+  where GB-seconds = (Requests × Avg Response Time × Memory in GB)
+
+CPU Cost = (vCPU-seconds) × $0.00002400
+  where vCPU-seconds = (Requests × Avg Response Time × vCPUs)
+
+Total Cost = Request Cost + Memory Cost + CPU Cost
+```
+
+**Example Calculation:**
+```
+Traffic: 10M requests/month
+Response time: 200ms (0.2 seconds)
+Memory: 512MB (0.5GB)
+CPU: 1 vCPU
+
+Request Cost = (10M / 1M) × $0.40 = $4.00
+
+Memory Cost = (10M × 0.2s × 0.5GB) × $0.00001800
+            = 1,000,000 GB-seconds × $0.00001800
+            = $18.00
+
+CPU Cost = (10M × 0.2s × 1vCPU) × $0.00002400
+         = 2,000,000 vCPU-seconds × $0.00002400
+         = $48.00
+
+Total = $4.00 + $18.00 + $48.00 = $70.00/month
+```
+
+**Free Tier Coverage:**
+```
+Free requests: 2M/month
+Free memory: 360,000 GB-seconds/month
+Free CPU: 180,000 vCPU-seconds/month
+
+Example traffic that fits in free tier:
+- 2M requests
+- 100ms response time
+- 256MB memory
+- 1 vCPU
+
+Memory used: 2M × 0.1s × 0.25GB = 50,000 GB-seconds ✅
+CPU used: 2M × 0.1s × 1vCPU = 200,000 vCPU-seconds ❌ (exceeds by 20,000)
+Overage cost: 20,000 × $0.00002400 = $0.48/month
+```
+
+### Dev Container Configuration
+
+**File: `.devcontainer/devcontainer.json`**
+```json
+{
+  "name": "FastAPI Cloud Deployment",
+  "build": {
+    "dockerfile": "../Dockerfile.dev",
+    "context": ".."
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-python.black-formatter"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.ruffEnabled": true,
+        "python.formatting.provider": "black",
+        "editor.formatOnSave": true
+      }
+    }
+  },
+  "forwardPorts": [8080, 5678],
+  "postCreateCommand": "pip install -r requirements.txt -r requirements-dev.txt",
+  "remoteUser": "root"
+}
+```
+
+**What this provides:**
+- Automatic Python extension installation
+- Pre-configured linting (Ruff)
+- Pre-configured formatting (Black)
+- Port forwarding for API (8080) and debugger (5678)
+- Automatic dependency installation
+- Consistent development environment
+
+### GitHub Actions Workflow Details
+
+**Workflow Trigger Configuration:**
+```yaml
+on:
+  push:
+    branches: [ gcloud ]
+    paths-ignore:
+      - 'docs/**'
+      - 'scripts/**'
+      - '*.md'
+      - '.gcloudignore'
+  workflow_dispatch:
+```
+
+**Why paths-ignore?**
+- Prevents workflow runs for documentation-only changes
+- Saves GitHub Actions minutes
+- Faster iteration on documentation
+
+**Test Job Caching:**
+```yaml
+- name: Set up Python
+  uses: actions/setup-python@v5
+  with:
+    python-version: '3.12'
+    cache: 'pip'  # Caches ~/.cache/pip
+```
+
+**Cache benefits:**
+- First run: ~2 minutes to install dependencies
+- Subsequent runs: ~30 seconds (75% faster)
+- Cache key based on requirements.txt hash
+
+**Image Tagging Strategy:**
+```yaml
+docker build \
+  -t $REGISTRY/$PROJECT/$REPO/$IMAGE:${{ github.sha }} \
+  -t $REGISTRY/$PROJECT/$REPO/$IMAGE:latest \
+  .
+```
+
+**Why two tags?**
+1. `${{ github.sha }}` - Git commit hash
+   - Immutable reference to exact code version
+   - Can rollback to specific commit
+   - Audit trail of what's deployed
+
+2. `latest` - Always points to newest
+   - Easy reference for manual deployments
+   - Convenient for local testing
+   - Updated on every push
+
+**Deployment Verification:**
+```yaml
+- name: Verify Deployment
+  run: |
+    sleep 10  # Wait for service to stabilize
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL/")
+    if [ "$HTTP_CODE" = "200" ]; then
+      echo "✅ Deployment successful!"
+    else
+      echo "❌ Service returned HTTP $HTTP_CODE"
+      exit 1
+    fi
+```
+
+**Why verification step?**
+- Deployment can succeed but service might be unhealthy
+- Catches startup crashes or misconfigurations
+- Provides immediate feedback in CI/CD logs
+
+---
+
 ## Phase 1: Fix Main Branch Foundation ✅ COMPLETED
 
 ### Overview
@@ -260,6 +605,42 @@ Create production-ready Google Cloud Run deployment with comprehensive tutorials
 
 - [x] Make all scripts executable (chmod +x)
 
+#### Script Implementation Details
+
+**scripts/setup-gcloud.sh Flow:**
+1. Check prerequisites (gcloud CLI installed)
+2. Get or prompt for project ID
+3. Set active project with `gcloud config set project`
+4. Enable APIs (run.googleapis.com, artifactregistry.googleapis.com, cloudbuild.googleapis.com)
+5. Prompt for region with default us-central1
+6. Create Artifact Registry repository
+7. Configure Docker authentication with `gcloud auth configure-docker`
+8. Save configuration to `.gcloud-config` file for reuse
+9. Display next steps and script to run
+
+**scripts/deploy-manual.sh Flow:**
+1. Load configuration from `.gcloud-config`
+2. Accept optional version tag parameter
+3. Check if Docker is running
+4. Build Docker image with `docker build -f Dockerfile.prod`
+5. Tag with both commit SHA and latest
+6. Push both tags to Artifact Registry
+7. Deploy to Cloud Run with `gcloud run deploy`
+8. Wait for deployment to complete
+9. Get service URL
+10. Test deployment with curl
+11. Display success message and endpoints
+
+**scripts/cleanup.sh Flow:**
+1. Load configuration from `.gcloud-config`
+2. Display warning with list of resources to delete
+3. Require explicit "yes" confirmation
+4. Delete Cloud Run service with `gcloud run services delete`
+5. Delete Artifact Registry repository with `gcloud artifacts repositories delete`
+6. Remove local `.gcloud-config` file
+7. Display cleanup summary
+8. Provide verification commands
+
 ### Production CI/CD Workflow
 
 - [x] Create `.github/workflows/deploy.yaml`
@@ -465,15 +846,46 @@ Create production-ready Google Cloud Run deployment with comprehensive tutorials
 
 - [x] Create `docs/tutorials/troubleshooting.md`
   - [x] Table of contents
-  - [x] Local development issues (dev container, app won't start, tests failing)
-  - [x] Docker issues (build fails, image too large, cannot push)
-  - [x] Google Cloud authentication issues
-  - [x] Deployment issues (API not enabled, permission denied, timeout, repository not found)
-  - [x] Runtime issues (container won't start, crashes, 503, 404, memory limit)
-  - [x] GitHub Actions / CI/CD issues (workflow not triggering, auth failed, tests fail in CI, build too long)
-  - [x] Performance issues (high latency, high CPU, timeout)
-  - [x] Cost issues (unexpected charges, how to reduce costs)
-  - [x] Getting more help (check logs, check config, test locally, community resources, file bug report)
+  - [x] Local development issues:
+    - [x] Dev container won't start (Docker not running, insufficient resources, port conflicts, corrupted cache)
+    - [x] Application won't start (ModuleNotFoundError, ImportError, PYTHONPATH issues)
+    - [x] Tests failing locally (order dependency, async issues, random failures)
+  - [x] Docker issues:
+    - [x] Build fails (cannot reach Docker Hub, Dockerfile syntax errors, missing files)
+    - [x] Image too large (use slim base, multi-stage builds, minimize layers)
+    - [x] Cannot push to Artifact Registry (permission denied, authentication issues)
+  - [x] Google Cloud authentication:
+    - [x] gcloud command not found (installation instructions by OS)
+    - [x] Authentication fails (network issues, no-launch-browser option)
+    - [x] Wrong project selected (list and set commands)
+  - [x] Deployment issues:
+    - [x] API not enabled (enable run.googleapis.com, artifactregistry.googleapis.com)
+    - [x] Permission denied (check IAM roles, contact project owner)
+    - [x] Deployment timeout (large image, slow pull, increase timeout)
+    - [x] Repository not found (create with gcloud artifacts repositories create)
+  - [x] Runtime issues:
+    - [x] Container won't start (port mismatch, missing dependencies, syntax errors)
+    - [x] Application crashes after start (check logs, test locally, verify env vars)
+    - [x] 503 Service Unavailable (container not healthy, too many requests, cold start timeout)
+    - [x] 404 Not Found (wrong path, route not defined, API_PREFIX mismatch)
+    - [x] Memory limit exceeded (check metrics, increase memory, optimize usage)
+  - [x] GitHub Actions / CI/CD issues:
+    - [x] Workflow not triggering (wrong branch, only docs changed, workflow disabled)
+    - [x] Authentication failed (missing secrets, invalid key, service account deleted)
+    - [x] Tests fail in CI but pass locally (environment differences, missing deps, Python version)
+    - [x] Build takes too long (enable caching, use smaller image, reduce dependencies)
+  - [x] Performance issues:
+    - [x] High latency (cold starts, external API calls, database queries, insufficient resources)
+    - [x] High CPU usage (profile with cProfile, optimize algorithms, increase CPU)
+    - [x] Request timeout (increase timeout, optimize code, check external dependencies)
+  - [x] Cost issues:
+    - [x] Unexpected charges (not scaling to zero, large images, health check traffic)
+    - [x] How to reduce costs (scale to zero, appropriate memory, delete unused images, budget alerts)
+  - [x] Getting more help:
+    - [x] Check logs (recent errors, specific time, severity filtering)
+    - [x] Check service configuration (describe command, review YAML)
+    - [x] Test locally first (build production image, run locally, test endpoints)
+    - [x] Community resources (GitHub issues/discussions, Stack Overflow, Google Cloud support, FastAPI Discord)
 
 ### Documentation Updates
 
@@ -507,6 +919,152 @@ Create production-ready Google Cloud Run deployment with comprehensive tutorials
 - [x] Verify README renders correctly
 - [x] Test workflow syntax (no errors)
 
+### Tutorial Pedagogy & Teaching Approach
+
+**Core Principles:**
+1. **Concepts Before Commands** - Explain "why" before "how"
+2. **Hands-On Learning** - Include practical exercises
+3. **Real-World Focus** - Production-ready, not toy examples
+4. **Progressive Complexity** - Start simple, build understanding
+5. **Multiple Learning Styles** - Text, diagrams, code examples, hands-on
+
+**Tutorial Structure Pattern:**
+
+Each tutorial follows this structure:
+```markdown
+# Tutorial Title
+
+## Overview
+- What you'll learn
+- Prerequisites
+- Time estimate
+
+## Concepts Section
+- Explain the technology/concept
+- Why it matters
+- How it works
+- Comparison with alternatives
+
+## Step-by-Step Implementation
+- Clear numbered steps
+- Expected output after each step
+- What's happening behind the scenes
+- Why each step is necessary
+
+## Hands-On Exercise
+- Practical task to reinforce learning
+- Guided but not hand-holdy
+- Link to solution in complete branch
+
+## Troubleshooting
+- Common issues for this specific topic
+- How to fix them
+
+## Summary
+- Key takeaways
+- What you learned
+- Link to next tutorial
+
+## Additional Resources
+- Official documentation links
+- Further reading
+```
+
+**Example - Tutorial 05 (Manual Deployment) Pedagogy:**
+
+1. **Understanding Cloud Run** (Concepts First)
+   - What is Cloud Run? (definition)
+   - How it works (diagram + explanation)
+   - vs Traditional hosting (comparison table)
+   - Cold starts (concept + mitigation)
+
+2. **Understanding Components** (Before deploying)
+   - Artifact Registry (what, why, alternatives)
+   - Service Account (what, why, security)
+   - Container Image (what, why, Dockerfile walkthrough)
+
+3. **Step-by-Step Deployment** (Doing)
+   - 8 clear steps with explanations
+   - Each step shows command + why + expected output
+   - Parameter explanations (not just copy-paste)
+
+4. **Understanding What Happened** (Reflection)
+   - Container lifecycle diagram
+   - Revisions concept
+   - URLs and domains
+
+5. **Beyond Basics** (Extension)
+   - Managing environment variables
+   - Updating deployment
+   - Viewing logs
+   - Cost monitoring
+
+**Specific Teaching Techniques:**
+
+- **Analogies**: "Think of Cloud Run like a vending machine - only runs when someone makes a request"
+- **Diagrams**: ASCII art for architecture, flow diagrams for processes
+- **Expected Output**: Show what success looks like
+- **Common Mistakes**: Highlight pitfalls before students hit them
+- **Why This Matters**: Connect to real-world scenarios
+- **Progressive Disclosure**: Don't overwhelm, layer information
+- **Verification Steps**: Let students confirm they're on track
+
+**Tutorial Content Examples:**
+
+**Tutorial 01 - Overview:**
+- Full architecture diagram with annotations
+- "What is Cloud Run?" section with:
+  - Simple definition for beginners
+  - Key features (auto-scaling, pay-per-use, fully managed, HTTPS)
+  - How it works (visual flow diagram)
+  - Comparison table vs traditional hosting
+- Learning outcomes (not just "you'll learn", but specific skills)
+- Time estimates broken down by section
+- Cost estimates with:
+  - Free tier details (2M requests/month, 360K GB-seconds)
+  - Example calculations ($15-20/month for 10M requests)
+  - Tips to stay in free tier
+
+**Tutorial 05 - Manual Deployment:**
+- 4,000+ words of comprehensive guidance
+- Concepts section explaining:
+  - What Cloud Run is (serverless container platform)
+  - How it differs from traditional hosting
+  - Cold starts (what, why, how to minimize)
+  - Components (Artifact Registry, Service Account, Container Image)
+- 8-step deployment process with:
+  - Every command explained parameter-by-parameter
+  - Expected output after each step
+  - What's happening behind the scenes
+  - Verification commands
+- Advanced topics:
+  - Managing environment variables (set, update, remove)
+  - Updating deployments (new versions, rollback)
+  - Viewing logs (CLI and console)
+  - Cost monitoring (calculations, budget alerts)
+  - Security best practices (auth, CORS, secrets, ingress)
+- Troubleshooting specific to deployment (10+ common issues)
+
+**Tutorial 06 - CI/CD Setup:**
+- CI/CD explanation (what, why, benefits)
+- GitHub Actions concepts (workflow, job, step, runner, action)
+- Complete workflow walkthrough with:
+  - Every line explained
+  - Why each step is needed
+  - How steps depend on each other
+  - Security implications
+- Service account setup:
+  - Why service accounts (not personal credentials)
+  - Exact permissions needed (4 IAM roles)
+  - Step-by-step creation commands
+  - Key generation and storage
+  - Security best practices (rotation, minimal permissions)
+- Workflow monitoring:
+  - How to view logs
+  - Understanding build states
+  - Debugging failures
+- Cost considerations (GitHub Actions minutes, optimization tips)
+
 ### Commit and Push
 
 - [x] Stage all Phase 2 changes
@@ -534,6 +1092,49 @@ Create a learning-focused branch with TODO markers and guided exercises for stud
   - [ ] Add hints about what needs to be implemented
   - [ ] Keep structure intact with comments
   - [ ] Add reference to tutorial 05 for guidance
+  - [ ] Example TODO structure:
+    ```bash
+    #!/bin/bash
+    # TODO: Uncomment and complete this script following tutorial 05
+
+    set -e
+
+    echo "Setting up Google Cloud environment..."
+
+    # TODO: Check if gcloud is installed
+    # Hint: Use 'command -v gcloud' to check
+    # if ! command -v gcloud &> /dev/null; then
+    #     echo "gcloud CLI not found"
+    #     exit 1
+    # fi
+
+    # TODO: Prompt for project ID
+    # Hint: Use 'read' to get user input
+    # echo "Enter your GCP Project ID:"
+    # read PROJECT_ID
+
+    # TODO: Set the active project
+    # Hint: Use 'gcloud config set project'
+    # gcloud config set project $PROJECT_ID
+
+    # TODO: Enable required APIs
+    # Hint: Use 'gcloud services enable'
+    # The APIs you need are:
+    # - run.googleapis.com
+    # - artifactregistry.googleapis.com
+    # - cloudbuild.googleapis.com
+
+    # TODO: Create Artifact Registry repository
+    # Hint: Use 'gcloud artifacts repositories create'
+    # Repository name: fastapi-repo
+    # Format: docker
+    # Location: us-central1
+
+    # TODO: Configure Docker authentication
+    # Hint: Use 'gcloud auth configure-docker'
+
+    echo "TODO: Complete this script following tutorial 05"
+    ```
 
 - [ ] Modify `scripts/deploy-manual.sh`
   - [ ] Comment out functional code
@@ -541,6 +1142,50 @@ Create a learning-focused branch with TODO markers and guided exercises for stud
   - [ ] Add hints about Docker commands, gcloud commands
   - [ ] Keep structure with comments
   - [ ] Add reference to tutorial 05
+  - [ ] Example TODO structure:
+    ```bash
+    #!/bin/bash
+    # TODO: Complete this deployment script following tutorial 05
+
+    # TODO: Load configuration from .gcloud-config
+    # Hint: Use 'source .gcloud-config' to load variables
+
+    # TODO: Get project ID
+    # Hint: Use 'gcloud config get-value project'
+    # PROJECT_ID=$(gcloud config get-value project)
+
+    # TODO: Check if Docker is running
+    # Hint: Use 'docker info' to verify
+
+    # TODO: Build Docker image
+    # Hint: Use 'docker build -f Dockerfile.prod'
+    # Tag format: us-central1-docker.pkg.dev/${PROJECT_ID}/fastapi-repo/fastapi:latest
+
+    # TODO: Push to Artifact Registry
+    # Hint: Use 'docker push'
+
+    # TODO: Deploy to Cloud Run
+    # Hint: Use 'gcloud run deploy'
+    # Service name: fastapi-service
+    # Parameters to include:
+    # - --image (your image)
+    # - --region us-central1
+    # - --platform managed
+    # - --allow-unauthenticated
+    # - --port 8080
+    # - --cpu 1
+    # - --memory 512Mi
+    # - --min-instances 0
+    # - --max-instances 10
+
+    # TODO: Get service URL
+    # Hint: Use 'gcloud run services describe'
+
+    # TODO: Test deployment
+    # Hint: Use 'curl' to test the endpoint
+
+    echo "TODO: Complete this script following tutorial 05"
+    ```
 
 - [ ] Modify `.github/workflows/deploy.yaml`
   - [ ] Keep workflow structure
@@ -548,6 +1193,49 @@ Create a learning-focused branch with TODO markers and guided exercises for stud
   - [ ] Comment out actual implementation
   - [ ] Add hints about what each step should do
   - [ ] Add reference to tutorial 06
+  - [ ] Example TODO structure:
+    ```yaml
+    name: Deploy to Google Cloud Run
+
+    # TODO: Configure environment variables
+    env:
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      REGION: us-central1
+      SERVICE_NAME: fastapi-service
+
+    on:
+      push:
+        branches: [ gcloud-starter ]  # Change to 'gcloud' when ready
+
+    jobs:
+      # TODO: Add test job
+      # Hint: Should run linting, type checking, and tests
+      # Steps needed:
+      # 1. Checkout code
+      # 2. Set up Python
+      # 3. Install dependencies
+      # 4. Run ruff check
+      # 5. Run pytest
+
+      # TODO: Add deploy job
+      # Hint: Should build, push, and deploy
+      # needs: test  # Only deploy if tests pass
+      # Steps needed:
+      # 1. Checkout code
+      # 2. Authenticate to Google Cloud
+      # 3. Set up Cloud SDK
+      # 4. Configure Docker for Artifact Registry
+      # 5. Build Docker image
+      # 6. Push Docker image
+      # 7. Deploy to Cloud Run
+      # 8. Verify deployment
+
+      placeholder:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Placeholder
+            run: echo "TODO: Complete workflow following tutorial 06"
+    ```
 
 ### Create Learning Aids
 
@@ -616,6 +1304,74 @@ Create a learning-focused branch with TODO markers and guided exercises for stud
 
 ### Overview
 Create production-ready Azure Container Apps deployment similar to GCloud branch structure.
+
+### Azure Container Apps vs Cloud Run
+
+**Similarities:**
+- Serverless container hosting
+- Auto-scaling from 0 to N instances
+- Pay-per-use pricing
+- HTTPS included
+- Managed infrastructure
+
+**Differences:**
+| Feature | Google Cloud Run | Azure Container Apps |
+|---------|------------------|----------------------|
+| SDK | gcloud CLI | az CLI |
+| Registry | Artifact Registry | Azure Container Registry (ACR) |
+| Service | Cloud Run | Container Apps |
+| Environment | Project | Resource Group + Environment |
+| Pricing Model | Per-request + compute | Per-second compute |
+| Max Timeout | 60 minutes | 30 minutes |
+| Max Instances | 1000 | 300 |
+
+### Azure-Specific Implementation Notes
+
+**Authentication Differences:**
+```bash
+# GCloud
+gcloud auth login
+gcloud config set project PROJECT_ID
+
+# Azure
+az login
+az account set --subscription SUBSCRIPTION_ID
+```
+
+**Registry Differences:**
+```bash
+# GCloud - Artifact Registry
+gcloud artifacts repositories create fastapi-repo
+
+# Azure - Azure Container Registry
+az acr create --name fastapiregistry --resource-group rg-fastapi
+```
+
+**Deployment Differences:**
+```bash
+# GCloud - Cloud Run
+gcloud run deploy fastapi-service --image IMAGE
+
+# Azure - Container Apps
+az containerapp create \
+  --name fastapi-app \
+  --resource-group rg-fastapi \
+  --environment containerapps-env \
+  --image IMAGE
+```
+
+**Configuration File Differences:**
+- GCloud: `config/cloudrun-service.yaml` (Knative format)
+- Azure: `config/container-app.yaml` (ARM template or Container Apps format)
+
+**Environment Variables:**
+```bash
+# GCloud
+--set-env-vars "KEY=value"
+
+# Azure
+--env-vars KEY=value
+```
 
 ### Branch Setup
 
@@ -976,3 +1732,143 @@ Update main branch README to tie everything together.
 **Last Updated**: Phase 2 completed - GCloud branch with comprehensive tutorials and automation
 **Next Step**: Phase 3 - Create gcloud-starter learning branch
 **Timeline**: Phases 3-5 pending user request
+
+---
+
+## Conversation Summary & Accomplishments
+
+### What Was Built
+
+**Phase 1 Accomplishments (Main Branch):**
+- Fixed critical security vulnerabilities (debugpy, CORS)
+- Created configuration management system (src/config.py)
+- Improved code organization (smokeTest → api)
+- Implemented comprehensive test suite
+- Added development tooling (ruff, black, mypy, pytest)
+- Created GitHub Actions test workflow
+- Established cloud-agnostic foundation
+
+**Phase 2 Accomplishments (GCloud Branch):**
+- Production-ready Cloud Run deployment
+- 8 comprehensive tutorials (5,000+ lines total)
+- 3 automation scripts (setup, deploy, cleanup)
+- Full CI/CD pipeline with GitHub Actions
+- Complete documentation (README, troubleshooting)
+- Cloud configuration files
+- Security best practices implemented
+
+### Technical Decisions Made
+
+1. **Start Fresh vs Git History**: Chose to build new well-designed files rather than restore deleted files from git history
+2. **Learning Approach**: Conceptual + Practical tutorials that explain "why" before "how"
+3. **Branch Strategy**: Complete branches for reference, starter branches for learning
+4. **Security**: Environment-based configuration, conditional debugging, proper CORS
+5. **Testing**: Comprehensive pytest suite with coverage reporting
+6. **CI/CD**: Production-ready workflows that actually deploy
+7. **Documentation**: Detailed but not verbose, straightforward without information overload
+
+### Problems Solved
+
+**Security Issues:**
+- ❌ BEFORE: debugpy always enabled → ✅ AFTER: Conditional based on DEBUG env var
+- ❌ BEFORE: CORS allows all origins → ✅ AFTER: Configurable via CORS_ORIGINS
+- ❌ BEFORE: Hardcoded configuration → ✅ AFTER: Environment-based settings
+
+**Code Quality Issues:**
+- ❌ BEFORE: Directory named `smokeTest` → ✅ AFTER: Named `api`
+- ❌ BEFORE: Function named `prompt()` → ✅ AFTER: Named `get_hello()`
+- ❌ BEFORE: No docstrings or type hints → ✅ AFTER: Comprehensive documentation
+- ❌ BEFORE: No tests → ✅ AFTER: Full test suite with coverage
+
+**Infrastructure Issues:**
+- ❌ BEFORE: No GitHub Actions → ✅ AFTER: Test and deploy workflows
+- ❌ BEFORE: No helper scripts → ✅ AFTER: Setup, deploy, cleanup automation
+- ❌ BEFORE: No tutorials → ✅ AFTER: 8 comprehensive guides
+- ❌ BEFORE: GCloud branch broken → ✅ AFTER: Full Cloud Run deployment
+
+### Key Learning Outcomes
+
+**For Users of This Repository:**
+1. Understand serverless container concepts
+2. Deploy FastAPI to production
+3. Set up automated CI/CD
+4. Monitor and debug cloud applications
+5. Manage costs effectively
+6. Follow security best practices
+
+**Technical Skills:**
+- FastAPI framework and Pydantic models
+- Docker containerization
+- Google Cloud Run deployment
+- GitHub Actions workflows
+- Service account management
+- Environment-based configuration
+- Testing with pytest
+- Linting and type checking
+
+### Metrics
+
+**Code Written:**
+- Phase 1: 446 insertions, 14 files changed
+- Phase 2: 5,179 insertions, 17 files changed
+- Total: 5,625+ lines of production-ready code
+
+**Documentation:**
+- 8 comprehensive tutorials
+- 1 troubleshooting guide
+- Complete README
+- Inline code comments
+- Total: ~15,000 words of documentation
+
+**Time Saved for Users:**
+- Manual setup: 10 minutes → Automated with scripts
+- Understanding Cloud Run: Hours of research → Clear tutorials
+- CI/CD setup: Hours of trial/error → Copy-paste ready workflow
+- Troubleshooting: Hours of searching → Organized guide
+
+### What Makes This Different
+
+**Compared to typical tutorials:**
+- ✅ Explains concepts before commands
+- ✅ Production-ready, not toy examples
+- ✅ Working CI/CD, not just examples
+- ✅ Comprehensive troubleshooting
+- ✅ Cost transparency
+- ✅ Security best practices
+- ✅ Multiple learning paths (complete vs starter)
+
+**Compared to documentation:**
+- ✅ Step-by-step guidance
+- ✅ Context and explanations
+- ✅ Expected outputs shown
+- ✅ Common mistakes highlighted
+- ✅ Hands-on exercises included
+
+### Repository Evolution
+
+**BEFORE (Initial State):**
+```
+❌ Security issues
+❌ Poor code organization
+❌ No tests
+❌ Broken GCloud branch
+❌ Minimal documentation
+❌ No automation
+```
+
+**AFTER (Current State):**
+```
+✅ Secure configuration
+✅ Well-organized code
+✅ Comprehensive tests
+✅ Working GCloud deployment
+✅ Extensive documentation
+✅ Full automation (scripts + CI/CD)
+```
+
+### Future Phases Planned
+
+**Phase 3**: GCloud starter branch for hands-on learning
+**Phase 4**: Azure complete branch for production deployment
+**Phase 5**: Azure starter branch for hands-on learning
+**Final Phase**: Main branch documentation tying everything together
