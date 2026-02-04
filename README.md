@@ -2,6 +2,12 @@
 
 This repository contains tutorials for deploying a containerized FastAPI application to multiple cloud providers.
 
+## Credits
+
+This project is based on the tutorial by Thaddeus Thomas:
+- **Video Tutorial**: [How to Deploy a Dockerized FastAPI to Google Cloud Run](https://www.youtube.com/watch?v=DQwAX5pS4E8)
+- **Original Repository**: [thaddavis/how-to-deploy-a-dockerized-fastapi-to-google-cloud-run](https://github.com/thaddavis/how-to-deploy-a-dockerized-fastapi-to-google-cloud-run/tree/main)
+
 ## Supported Cloud Providers
 
 Choose your cloud provider to get started:
@@ -44,3 +50,8 @@ docker run -p 8080:8080 fastapi-dev
 
 # Or open in VS Code and use "Reopen in Container"
 ```
+
+## Licencse
+
+GPL-3.0
+
