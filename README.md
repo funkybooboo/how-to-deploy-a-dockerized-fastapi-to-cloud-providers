@@ -1,46 +1,48 @@
-# How to Deploy a Dockerized FastAPI to Cloud Providers
+# Deploy Dockerized FastAPI to Azure Container Apps
 
-This repository contains tutorials for deploying a containerized FastAPI application to multiple cloud providers.
+A complete tutorial for deploying a containerized FastAPI application to Microsoft Azure using Container Apps.
 
-## Supported Cloud Providers
+## What You'll Learn
 
-Choose your cloud provider to get started:
+- Set up a local development environment with Dev Containers
+- Build a FastAPI application
+- Deploy to Azure Container Apps
+- Set up CI/CD with GitHub Actions
 
-- **[Google Cloud (GCloud)](../../tree/gcloud)** - Deploy to Cloud Run
-- **[Microsoft Azure](../../tree/azure)** - Deploy to Container Apps
+## Prerequisites
 
-## What's Included
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- [VS Code](https://code.visualstudio.com/download)
+- A Microsoft Azure account
+- Azure CLI (can be installed in dev container)
 
-This `main` branch contains the shared, cloud-agnostic components:
+## Tutorial Steps
 
-- FastAPI application (`src/`)
-- Production Dockerfile (`Dockerfile.prod`)
-- Development Dockerfile (`Dockerfile.dev`)
-- Dev Container configuration (`.devcontainer/`)
-- Python dependencies (`requirements.txt`)
+Follow these guides in order:
 
-## Getting Started
+1. **[Part 1: Create a Dev Container](./part_1.md)** - Set up local development environment
+2. **[Part 2: Build a FastAPI Application](./part_2.md)** - Create FastAPI endpoints
+3. **[Part 3: Deploy to Azure Container Apps](./part_3.md)** - Deploy to Azure
+4. **[Part 4: Set Up CI/CD](./part_4.md)** - Configure GitHub Actions
 
-1. **Choose your cloud provider** from the list above
-2. **Switch to that branch** (e.g., `git checkout gcloud`)
-3. **Follow the tutorial** in that branch's README
-
-## Repository Structure
-
-- `main` - Shared application code (this branch)
-- `gcloud` - Google Cloud deployment
-- `azure` - Microsoft Azure deployment
-
-Each cloud branch builds on top of `main` and adds cloud-specific configuration and documentation.
-
-## Local Development
-
-The application can be run locally using Docker or the VS Code Dev Container:
+## Quick Start
 
 ```bash
-# Using Docker
-docker build -f Dockerfile.dev -t fastapi-dev .
-docker run -p 8080:8080 fastapi-dev
-
-# Or open in VS Code and use "Reopen in Container"
+git clone <repo-url>
+cd <repo-name>
+git checkout azure
+code .
+# Reopen in Dev Container
 ```
+
+## Architecture
+
+- **Application:** FastAPI Python web framework
+- **Container:** Docker with Python 3.12
+- **Registry:** Azure Container Registry (ACR)
+- **Hosting:** Azure Container Apps
+- **CI/CD:** GitHub Actions
+
+## Other Cloud Providers
+
+See the [main branch README](../../tree/main) for Google Cloud deployment.

@@ -1,0 +1,30 @@
+properties:
+  configuration:
+    ingress:
+      external: true
+      targetPort: 8080
+      allowInsecure: false
+      traffic:
+        - latestRevision: true
+          weight: 100
+    registries:
+      - server: fastapiregistry.azurecr.io
+        identity: system
+  template:
+    containers:
+      - image: fastapiregistry.azurecr.io/fastapi:latest
+        name: fastapi-app
+        resources:
+          cpu: 0.5
+          memory: 1Gi
+        env:
+          - name: PORT
+            value: "8080"
+    scale:
+      minReplicas: 1
+      maxReplicas: 3
+      rules:
+        - name: http-scaling
+          http:
+            metadata:
+              concurrentRequests: "100"
