@@ -7,8 +7,8 @@ middleware, and routing.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import get_settings
 from .api import health, hello
+from .config import get_settings
 
 # Load configuration from environment
 settings = get_settings()

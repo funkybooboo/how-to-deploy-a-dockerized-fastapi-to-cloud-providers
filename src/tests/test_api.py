@@ -1,6 +1,6 @@
 """Tests for API endpoints."""
 import os
-import pytest
+
 from fastapi.testclient import TestClient
 
 # Set test environment before importing app
