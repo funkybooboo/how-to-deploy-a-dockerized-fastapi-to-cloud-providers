@@ -98,8 +98,8 @@ Start with [tutorials/01-overview.md](./docs/tutorials/01-overview.md) for a gui
 │   └── cleanup.sh           # Resource cleanup script
 ├── .github/
 │   └── workflows/
-│       ├── test.yaml        # Test workflow (main branch)
-│       └── deploy.yaml      # Deploy workflow (gcloud branch)
+│       ├── ci.yaml          # Test workflow (main branch)
+│       └── cd.yaml          # Deploy workflow (gcloud branch)
 ├── Dockerfile.dev           # Development container
 ├── Dockerfile.prod          # Production container
 ├── requirements.txt         # Python dependencies
