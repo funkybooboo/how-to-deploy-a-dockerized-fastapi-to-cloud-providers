@@ -1,6 +1,6 @@
-name: Deploy to Google Cloud Run
+name: CD
 
-# This workflow automatically builds, tests, and deploys your FastAPI application
+# Continuous Deployment: Automatically builds, tests, and deploys your FastAPI application
 # to Google Cloud Run whenever you push to the gcloud branch.
 #
 # Required GitHub Secrets:
