@@ -2,6 +2,8 @@
 
 A complete tutorial for deploying a containerized FastAPI application to Microsoft Azure using Container Apps.
 
+> **📚 General Documentation**: For application architecture, Docker guides, and local development, see the [docs/](./docs/) directory with 5 comprehensive guides covering FastAPI, Docker, development workflow, and API reference.
+
 ## What You'll Learn
 
 - Set up a local development environment with Dev Containers
