@@ -1,4 +1,5 @@
 """API endpoints module."""
-from . import hello, health
+
+from . import health, hello
 
 __all__ = ["hello", "health"]

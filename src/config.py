@@ -4,8 +4,8 @@ Application configuration management.
 Loads configuration from environment variables with sensible defaults.
 This module provides centralized configuration management for the FastAPI application.
 """
+
 import os
-from typing import List
 from functools import lru_cache
 
 
@@ -22,7 +22,7 @@ class Settings:
     API_VERSION: str = os.getenv("API_VERSION", "1.0.0")
 
     # CORS
-    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "*").split(",")
+    CORS_ORIGINS: list[str] = os.getenv("CORS_ORIGINS", "*").split(",")
 
     # Server
     HOST: str = os.getenv("HOST", "0.0.0.0")
@@ -39,7 +39,7 @@ class Settings:
         return self.ENVIRONMENT == "development"
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     """
     Get cached settings instance.
