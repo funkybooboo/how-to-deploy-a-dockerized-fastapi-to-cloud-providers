@@ -267,10 +267,10 @@ This repository has three branches for different purposes:
 - **Use For**: Local development, understanding FastAPI, creating your own deployment
 
 ### GCloud Branch
-- **Purpose**: Google Cloud Run deployment (Production Ready ✅)
+- **Purpose**: Google Cloud Run deployment
 - **What's Included**:
   - Everything from main branch
-  - 8 comprehensive tutorials (~15,000 words)
+  - Gcloud-specific tutorials
   - Helper scripts (setup, deploy, cleanup)
   - Cloud Run configuration
   - GitHub Actions CI/CD
@@ -283,8 +283,10 @@ This repository has three branches for different purposes:
 - **What's Included**:
   - Everything from main branch
   - Azure-specific tutorials
+  - Helper scripts (setup, deploy, cleanup)
   - Azure Container Apps configuration
   - GitHub Actions CI/CD for Azure
+  - Troubleshooting guide
 - **Deploy To**: Azure Container Apps
 - **Documentation**: [Azure Branch](../../tree/azure)
 
