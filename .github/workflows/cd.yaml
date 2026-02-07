@@ -15,6 +15,7 @@ name: CD
 # Environment variables for easy configuration
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
   REGION: us-central1
   SERVICE_NAME: fastapi-service
   REGISTRY: us-central1-docker.pkg.dev
@@ -82,10 +83,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Validate GCP_PROJECT_ID
+        run: |
+          if [ -z "${{ env.PROJECT_ID }}" ]; then
+            echo "🛑 Error: GCP_PROJECT_ID secret is not set."
+            echo "Please add the GCP_PROJECT_ID secret to your GitHub repository."
+            echo "See docs/tutorials/06-cicd-setup.md for instructions."
+            exit 1
+          fi
+          echo "✅ GCP_PROJECT_ID is set."
+
+      - name: Validate GCP_SA_KEY
+        run: |
+          if [ -z "${{ env.GCP_SA_KEY }}" ]; then
+            echo "🛑 Error: GCP_SA_KEY secret is not set."
+            echo "Please add the GCP_SA_KEY secret to your GitHub repository."
+            echo "See docs/tutorials/06-cicd-setup.md for instructions."
+            exit 1
+          fi
+          echo "✅ GCP_SA_KEY is set."
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ env.GCP_SA_KEY }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
