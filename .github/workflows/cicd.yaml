@@ -23,8 +23,10 @@ env:
   IMAGE_NAME: fastapi
 
 on:
+  pull_request: 
+    branches: [ main ]
   push:
-    branches: [ gcloud ]
+    branches: [ main, gcloud ]
     paths-ignore:
       - 'docs/**'
       - 'scripts/**'
