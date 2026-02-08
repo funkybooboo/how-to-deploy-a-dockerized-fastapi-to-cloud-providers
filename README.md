@@ -274,7 +274,7 @@ This repository supports multiple cloud providers:
 
 - **[Main Branch](../../tree/main)** - Cloud-agnostic base code
 - **[GCloud Branch](../../tree/gcloud)** - Google Cloud Run (you are here)
-- **[Azure Branch](../../tree/azure)** - Azure Container Apps (coming soon)
+- **[Azure Branch](../../tree/azure)** - Azure Container Apps
 
 ## 🤝 Contributing
 
@@ -301,11 +301,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 - Get started: https://docs.docker.com/get-started/
 - Best practices: https://docs.docker.com/develop/dev-best-practices/
 
-## 🙏 Credits
 
-This project is based on the tutorial by Thaddeus Thomas:
-- **Video Tutorial**: [How to Deploy a Dockerized FastAPI to Google Cloud Run](https://www.youtube.com/watch?v=DQwAX5pS4E8)
-- **Original Repository**: [thaddavis/how-to-deploy-a-dockerized-fastapi-to-google-cloud-run](https://github.com/thaddavis/how-to-deploy-a-dockerized-fastapi-to-google-cloud-run/tree/main)
 
 ## 📝 License
 
